@@ -4,7 +4,7 @@ Originaly proposed by @vgaetera
 
 REFS:
 - https://openwrt.org/license
-- https://openwrt.org/docs/guide-user/advanced/hotplug_extras
+- https://openwrt.org/docs/guide-user/advanced/opkg_extras
 
 ====== Opkg extras ======
 {{section>meta:infobox:howto_links#cli_skills&noheader&nofooter&noeditbutton}}
