@@ -37,7 +37,8 @@ REFS:
   * Process packages one by one to minimize resource consumption and avoid transaction failure.
 
 ===== Commands =====
-^ Sub-command ^ Description ^
+| Sub-command | Description |
+| --- | --- |
 | ''**init**'' | Initialize Opkg configuration. |
 | ''**uci** [<prof>] < <uciprof>'' | Import Opkg profile from stdin or file to UCI. |
 | ''**import** [<bakprof>]'' | Import Opkg profile from Sysupgrade backup to UCI. |
