@@ -14,16 +14,16 @@ esac
 opkg_init() {
 uci import opkg < /dev/null
 uci -q batch << EOI
-set opkg.defaults='opkg'
-set opkg.defaults.import='/etc/backup/installed_packages.txt'
-set opkg.defaults.save='auto'
-set opkg.defaults.restore='auto'
-set opkg.defaults.rollback='auto'
-set opkg.defaults.upgr='ai'
-set opkg.defaults.export='ai'
-set opkg.defaults.proc='--force-depends'
-set opkg.defaults.reinstall='--force-reinstall'
-set opkg.defaults.newconf='/etc'
+set opkg.defaults=opkg
+set opkg.defaults.import=/etc/backup/installed_packages.txt
+set opkg.defaults.save=auto
+set opkg.defaults.restore=auto
+set opkg.defaults.rollback=auto
+set opkg.defaults.upgr=ai
+set opkg.defaults.export=ai
+set opkg.defaults.proc=--force-depends
+set opkg.defaults.reinstall=--force-reinstall
+set opkg.defaults.newconf=/etc
 EOI
 }
 
@@ -34,11 +34,11 @@ if ! uci -q get opkg > /dev/null
 then opkg init
 fi
 uci -q batch << EOI
-delete opkg.'${OPKG_OPT}'
-set opkg.'${OPKG_OPT}'='opkg'
+delete opkg.${OPKG_OPT}
+set opkg.${OPKG_OPT}=opkg
 $(sed -r -e "s/^(.*)\s(.*)$/\
-del_list opkg.'${OPKG_OPT}'.'\2'='\1'\n\
-add_list opkg.'${OPKG_OPT}'.'\2'='\1'/")
+del_list opkg.${OPKG_OPT}.\2=\1\n\
+add_list opkg.${OPKG_OPT}.\2=\1/")
 commit opkg
 EOI
 }
@@ -63,7 +63,7 @@ if uci -q get fstab.rwm > /dev/null \
 then {
 sed -e "s/$/\trpkg/" "${OPKG_WR}"
 sed -e "s/$/\tipkg/" "${OPKG_WI}"
-} | opkg uci init
+} | opkg uci rwm
 fi
 {
 sed -e "s/$/\trpkg/" "${OPKG_UR}"
@@ -74,7 +74,7 @@ rm -f "${OPKG_WR}" "${OPKG_WI}" "${OPKG_UR}" "${OPKG_UI}"
 
 opkg_restore() {
 local OPKG_OPT="${1:-${OPKG_UCI}}"
-local OPKG_CONF="${OPKG_OPT}"
+local OPKG_CFG="${OPKG_OPT}"
 local OPKG_AI="$(opkg export ai)"
 local OPKG_PR="$(opkg export pr)"
 local OPKG_PI="$(opkg export pi)"
@@ -87,13 +87,13 @@ rm -f "${OPKG_AI}" "${OPKG_PR}" "${OPKG_PI}"
 
 opkg_rollback() {
 local OPKG_OPT="${1:-${OPKG_UCI}}"
-local OPKG_CONF="${OPKG_OPT}"
+local OPKG_CFG="${OPKG_OPT}"
 local OPKG_UR="$(opkg export ur)"
 local OPKG_UI="$(opkg export ui)"
 local OPKG_PR="$(opkg export pr)"
 local OPKG_PI="$(opkg export pi)"
-if uci -q get opkg."${OPKG_CONF}" > /dev/null
-then opkg restore "${OPKG_CONF}"
+if uci -q get opkg."${OPKG_CFG}" > /dev/null
+then opkg restore "${OPKG_CFG}"
 grep -v -x -f "${OPKG_PI}" "${OPKG_UI}" \
 | opkg proc remove
 grep -v -x -f "${OPKG_PR}" "${OPKG_UR}" \
@@ -122,14 +122,14 @@ rm -f "${OPKG_AI}" "${OPKG_OI}" "${OPKG_AU}"
 
 opkg_export() {
 local OPKG_OPT="${1:-${OPKG_UCI}}"
-local OPKG_TEMP="$(mktemp -t opkg.XXXXXX)"
+local OPKG_EXP="$(mktemp -t opkg.XXXXXX)"
 case "${OPKG_OPT}" in
 (ai|au) opkg_"${OPKG_CMD}"_cmd ;;
 (ri|wr|wi|or|oi) opkg_"${OPKG_CMD}"_type ;;
 (ur|ui) opkg_"${OPKG_CMD}"_run ;;
 (pr|pi) opkg_"${OPKG_CMD}"_uci ;;
-esac > "${OPKG_TEMP}"
-echo "${OPKG_TEMP}"
+esac > "${OPKG_EXP}"
+echo "${OPKG_EXP}"
 }
 
 opkg_export_cmd() {
@@ -175,7 +175,7 @@ case "${OPKG_OPT:1}" in
 (r) OPKG_TYPE="rpkg" ;;
 (i) OPKG_TYPE="ipkg" ;;
 esac
-uci -q get opkg."${OPKG_CONF}"."${OPKG_TYPE}" \
+uci -q get opkg."${OPKG_CFG}"."${OPKG_TYPE}" \
 | sed -e "s/\s/\n/g"
 }
 
@@ -200,23 +200,22 @@ find "${OPKG_OPT}" -name "*-opkg"
 EOF
 . /etc/profile.d/opkg.sh
 
-# Configure hotplug
+# Restore packages automatically
 mkdir -p /etc/hotplug.d/online
 cat << "EOF" > /etc/hotplug.d/online/50-opkg-restore
-OPKG_CONF="init main"
-for OPKG_CONF in ${OPKG_CONF}
-do if [ ! -e /etc/opkg-restore-"${OPKG_CONF}" ] \
+if [ ! -e /etc/opkg-restore ] \
 && lock -n /var/lock/opkg-restore \
 && opkg update
 then . /etc/profile.d/opkg.sh
-opkg restore "${OPKG_CONF/main}" 2>&1 \
-| logger -t opkg
-touch /etc/opkg-restore-"${OPKG_CONF}"
+if uci -q get fstab.overlay > /dev/null \
+&& ! grep -q -e "\s/overlay\s" /etc/mtab
+then opkg restore rwm
+else opkg restore
+fi
+touch /etc/opkg-restore
 lock -u /var/lock/opkg-restore
 reboot
-break
 fi
-done
 EOF
 cat << "EOF" >> /etc/sysupgrade.conf
 /etc/hotplug.d/online/50-opkg-restore
